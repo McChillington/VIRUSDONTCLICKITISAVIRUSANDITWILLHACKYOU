@@ -7,46 +7,52 @@ if game:GetService("Players").LocalPlayer.Name == playeruser then
     local lp = ps.LocalPlayer
 
     local function serverHop()
-        print("hopping")
-
+        print("finding fresh server...")
+        
+        -- Pulling from a reliable server list format
         local success, result = pcall(function()
-            local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=100"
+            local url = "https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Desc&limit=100"
             return hs:JSONDecode(game:HttpGet(url))
         end)
     
         if success and result and result.data then
             local servers = {}
             for _, s in ipairs(result.data) do
-                if type(s) == "table" and s.playing < s.maxPlayers and s.id ~= game.JobId then
+                -- Grab servers with open slots that aren't our current one
+                if type(s) == "table" and s.playing < s.maxPlayers and s.id ~= game.JobId and s.playing >= 1 then
                     table.insert(servers, s.id)
                 end
             end
             
             if #servers > 0 then
-                local targetServer = servers[math.random(1, #servers)]
-                print("trying server " .. targetServer)
+                -- Pick from the bottom of the list (lowest players) for better odds
+                local targetServer = servers[#servers]
+                print("hopping to instance: " .. targetServer)
                 
-                -- Use TeleportAsync if supported, otherwise safely catch instance errors
                 local tpSuccess, tpErr = pcall(function()
                     ts:TeleportToPlaceInstance(game.PlaceId, targetServer, lp)
                 end)
-
+                
                 if tpSuccess then
                     return
                 else
-                    warn("instance full/dead, falling back to standard queue...")
+                    warn("instance rejected: " .. tostring(tpErr))
                 end
             end
         end
         
-        -- Ultimate fallback: standard Roblox matchmaking queue avoids 769 entirely
-        local fallbackSuccess, fallbackErr = pcall(function()
-            ts:Teleport(game.PlaceId, lp)
+        -- If specific instance fails, use the alternative place hopper method
+        pcall(function()
+            local servers = hs:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=10"))
+            if servers and servers.data then
+                for _, s in ipairs(servers.data) do
+                    if s.id ~= game.JobId and s.playing < s.maxPlayers then
+                        ts:TeleportToPlaceInstance(game.PlaceId, s.id, lp)
+                        return
+                    end
+                end
+            end
         end)
-        
-        if not fallbackSuccess then
-            warn("fallback failed: " .. tostring(fallbackErr))
-        end
     end
 
     local monsters = workspace:WaitForChild("Monsters", 10)
