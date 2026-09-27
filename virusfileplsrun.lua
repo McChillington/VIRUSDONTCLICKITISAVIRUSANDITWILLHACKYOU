@@ -1,3 +1,4 @@
+print("v8")
 local playeruser = "Yogotracer"
 
 if game:GetService("Players").LocalPlayer.Name == playeruser then
