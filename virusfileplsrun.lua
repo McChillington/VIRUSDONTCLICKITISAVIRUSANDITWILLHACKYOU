@@ -54,27 +54,17 @@ if game:GetService("Players").LocalPlayer.Name == playeruser then
         return
     end
 
-    local viciousBee = nil
+    local hasVicious = false
     for _, mob in ipairs(monsters:GetChildren()) do
         if string.find(mob.Name, "Vicious") then
-            viciousBee = mob
+            hasVicious = true
             break
         end
     end
 
-    if not viciousBee then
+    if not hasVicious then
         print("no stingers bud")
         serverHop()
-        return
-    end
-
-    print("vic is here, executing script...")
-    local success, err = pcall(function()
-        loadstring(game:HttpGet("https://raw.githubusercontent.com/Chris12089/atlasbss/main/script.lua"))()
-    end)
-
-    if not success then
-        warn("loadstring error " .. tostring(err))
         return
     end
 
@@ -86,34 +76,45 @@ if game:GetService("Players").LocalPlayer.Name == playeruser then
         serverHop()
     end
 
-    -- Safety Net 1: Ancestry hook
-    local connection
-    connection = viciousBee.AncestryChanged:Connect(function(_, parent)
-        if not parent then
-            if connection then connection:Disconnect() end
-            triggerHop()
-        end
-    end)
-
-    -- Safety Net 2: Main loop check
+    -- 1. START THE WATCHER FIRST (Independent thread so it can't be killed by loadstring errors)
     task.spawn(function()
+        task.wait(3) -- let things settle on spawn
+        
         while not hopped do
-            task.wait(0.5)
-            if not viciousBee or not viciousBee.Parent then
-                if connection then connection:Disconnect() end
+            task.wait(0.3) -- check every 300ms aggressively
+            local currentMonsters = workspace:FindFirstChild("Monsters")
+            local stillHasVicious = false
+            
+            if currentMonsters then
+                for _, mob in ipairs(currentMonsters:GetChildren()) do
+                    if string.find(mob.Name, "Vicious") then
+                        stillHasVicious = true
+                        break
+                    end
+                end
+            end
+            
+            -- If Vicious is gone from the folder, hop instantly
+            if not stillHasVicious then
+                print("vicious bee is officially gone, hopping...")
                 triggerHop()
                 break
             end
         end
     end)
 
-    -- Safety Net 3: The Big Red Button (Absolute max time fallback)
-    -- If Vicious takes more than 5 minutes to kill or script locks up, force hop anyway
+    -- 2. THE BIG RED BUTTON (Absolute max 5-minute safety net)
     task.spawn(function()
-        task.wait(300) 
+        task.wait(300)
         if not hopped then
             print("safety net timer reached: forcing hop")
             triggerHop()
         end
+    end)
+
+    -- 3. EXECUTE EXTERNAL SCRIPT AFTER (If it errors, the watcher is already safe running above)
+    print("vic is here, executing script...")
+    pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Chris12089/atlasbss/main/script.lua"))()
     end)
 end
