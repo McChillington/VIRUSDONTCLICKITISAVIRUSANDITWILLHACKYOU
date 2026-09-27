@@ -1,4 +1,3 @@
-print("v9")
 local playeruser = "Yogotracer"
 
 if game:GetService("Players").LocalPlayer.Name == playeruser then
@@ -27,17 +26,15 @@ if game:GetService("Players").LocalPlayer.Name == playeruser then
                 local targetServer = servers[math.random(1, #servers)]
                 print("hopping to instance: " .. targetServer)
                 
-                local tpSuccess, tpErr = pcall(function()
+                local tpSuccess = pcall(function()
                     ts:TeleportToPlaceInstance(game.PlaceId, targetServer, lp)
                 end)
                 
-                if tpSuccess then
-                    return
-                end
+                if tpSuccess then return end
             end
         end
         
-        -- Fallback low-population fetch
+        -- Fallback low-pop fetch
         pcall(function()
             local servers = hs:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/" .. game.PlaceId .. "/servers/Public?sortOrder=Asc&limit=10"))
             if servers and servers.data then
@@ -57,7 +54,6 @@ if game:GetService("Players").LocalPlayer.Name == playeruser then
         return
     end
 
-    -- Find and lock onto the exact Vicious Bee instance
     local viciousBee = nil
     for _, mob in ipairs(monsters:GetChildren()) do
         if string.find(mob.Name, "Vicious") then
@@ -82,23 +78,42 @@ if game:GetService("Players").LocalPlayer.Name == playeruser then
         return
     end
 
-    -- Track the exact monster object. The second it gets destroyed/dies, hop instantly.
+    local hopped = false
+    local function triggerHop()
+        if hopped then return end
+        hopped = true
+        print("triggering forced server hop...")
+        serverHop()
+    end
+
+    -- Safety Net 1: Ancestry hook
     local connection
     connection = viciousBee.AncestryChanged:Connect(function(_, parent)
         if not parent then
-            print("vic is dead/gone, hopping instantly...")
             if connection then connection:Disconnect() end
-            serverHop()
+            triggerHop()
         end
     end)
 
-    -- Backup safety check loop in case AncestryChanged doesn't fire due to weird BSS despawns
-    while task.wait(0.3) do
-        if not viciousBee or not viciousBee.Parent or viciousBee.Parent ~= workspace:FindFirstChild("Monsters") then
-            print("vic check failed, hopping...")
-            if connection then connection:Disconnect() end
-            serverHop()
-            break
+    -- Safety Net 2: Main loop check
+    task.spawn(function()
+        while not hopped do
+            task.wait(0.5)
+            if not viciousBee or not viciousBee.Parent then
+                if connection then connection:Disconnect() end
+                triggerHop()
+                break
+            end
         end
-    end
+    end)
+
+    -- Safety Net 3: The Big Red Button (Absolute max time fallback)
+    -- If Vicious takes more than 5 minutes to kill or script locks up, force hop anyway
+    task.spawn(function()
+        task.wait(300) 
+        if not hopped then
+            print("safety net timer reached: forcing hop")
+            triggerHop()
+        end
+    end)
 end
