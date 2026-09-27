@@ -6,8 +6,6 @@ if game:GetService("Players").LocalPlayer.Name == playeruser then
     local hs = game:GetService("HttpService")
     local lp = ps.LocalPlayer
 
-    local fallback = true
-
     local function serverHop()
         print("hopping")
 
@@ -25,30 +23,29 @@ if game:GetService("Players").LocalPlayer.Name == playeruser then
             end
             
             if #servers > 0 then
-                -- Shuffle or loop through up to 5 attempts to bypass dead instances
-                for i = 1, math.min(5, #servers) do
-                    local randomIndex = math.random(1, #servers)
-                    local targetServer = servers[randomIndex]
-                    table.remove(servers, randomIndex) -- Don't try the same dead server twice
-                    
-                    print("trying server " .. targetServer)
-                    local tpSuccess, tpErr = pcall(function()
-                        ts:TeleportToPlaceInstance(game.PlaceId, targetServer, lp)
-                    end)
+                local targetServer = servers[math.random(1, #servers)]
+                print("trying server " .. targetServer)
+                
+                -- Use TeleportAsync if supported, otherwise safely catch instance errors
+                local tpSuccess, tpErr = pcall(function()
+                    ts:TeleportToPlaceInstance(game.PlaceId, targetServer, lp)
+                end)
 
-                    if tpSuccess then
-                        return
-                    else
-                        warn("server dead/full, trying next... " .. tostring(tpErr))
-                        task.wait(0.3)
-                    end
+                if tpSuccess then
+                    return
+                else
+                    warn("instance full/dead, falling back to standard queue...")
                 end
             end
         end
-
-        if fallback == true then
-            print("fallback to general queue")
+        
+        -- Ultimate fallback: standard Roblox matchmaking queue avoids 769 entirely
+        local fallbackSuccess, fallbackErr = pcall(function()
             ts:Teleport(game.PlaceId, lp)
+        end)
+        
+        if not fallbackSuccess then
+            warn("fallback failed: " .. tostring(fallbackErr))
         end
     end
 
